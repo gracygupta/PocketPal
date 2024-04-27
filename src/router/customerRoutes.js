@@ -48,4 +48,16 @@ router.post(
   validator.validateRequest,
   loanController.checkEligibility
 );
+
+router.post(
+  "/create-loan",
+  [
+    body("customer_id", "customer_id required").exists(),
+    body("loan_amount", "loan_amount required").exists(),
+    body("interest_rate", "interest_rate required").exists(),
+    body("tenure", "tenure required").exists(),
+  ],
+  validator.validateRequest,
+  loanController.createLoan
+);
 module.exports = router;

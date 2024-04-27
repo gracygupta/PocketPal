@@ -1,5 +1,6 @@
 const http_codes = require("../constants/http_codes");
 const pool = require("../db/connection");
+const axios = require("axios");
 
 function prepareCreditScoreData(customerData, loanData) {
   const currentYear = new Date().getFullYear();
@@ -166,6 +167,111 @@ exports.checkEligibility = async (req, res) => {
       success: true,
       data: responseBody,
     });
+  } catch (err) {
+    console.log(err);
+    return res.status(http_codes.internal_server_error).json({
+      success: false,
+      message: "Internal Server Error",
+    });
+  }
+};
+
+getStartDate = () => {
+  const currentDate = new Date();
+
+  const options = {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+    timeZone: "Asia/Kolkata",
+  };
+  const formattedDate = currentDate.toLocaleString("en-IN", options);
+  const dateWithDashes = formattedDate.replace(/\//g, "-");
+  return dateWithDashes;
+};
+
+getEndDate = (tenure) => {
+  const currentDate = new Date();
+
+  const month = tenure % 12;
+  const year = parseInt(tenure / 12);
+  // Calculate the end date by adding the tenure (in months) to the current date
+  const endDate = new Date(currentDate);
+  endDate.setMonth(endDate.getMonth() + month);
+  endDate.setFullYear(endDate.getFullYear() + year);
+
+  // Convert the end date to "mm-dd-yyyy" format
+  const options = {
+    month: "2-digit",
+    day: "2-digit",
+    year: "numeric",
+    timeZone: "Asia/Kolkata",
+  };
+  const formattedEndDate = endDate.toLocaleString("en-IN", options);
+  const endDateWithDashes = formattedEndDate.replace(/\//g, "-");
+
+  return endDateWithDashes;
+};
+
+exports.createLoan = async (req, res) => {
+  try {
+    const { customer_id, loan_amount, interest_rate, tenure } = req.body;
+
+    // check-eligibility
+    const response = await axios.post(
+      "http://localhost:3000/check-eligibility",
+      { customer_id, loan_amount, interest_rate, tenure }
+    );
+    const data = response.data.data;
+
+    let loan_id = null;
+    let message = "";
+
+    if (data.approval == true) {
+      const customerQuery = {
+        text: `UPDATE customers
+                   SET current_debt = current_debt + $1
+                   WHERE customer_id = $2`,
+        values: [loan_amount, customer_id],
+      };
+      const updatedCustomer = await pool.query(customerQuery);
+
+      const start_date = getStartDate();
+      const end_date = getEndDate(parseInt(tenure));
+
+      // Query loan data for the customer from the database
+      const loanQuery = {
+        text: `INSERT INTO loans 
+               (customer_id, loan_amount, tenure, interest_rate, monthly_repayment, emis_paid_on_time, start_date, end_date) 
+               VALUES ($1, $2, $3, $4, $5, $6, $7, $8) 
+               RETURNING loan_id`,
+        values: [
+          customer_id,
+          loan_amount,
+          tenure,
+          data.corrected_interest_rate,
+          data.monthly_installment,
+          0,
+          start_date,
+          end_date,
+        ],
+      };
+
+      const loanDataResult = await pool.query(loanQuery);
+      loan_id = loanDataResult.rows[0].loan_id;
+      message = `load approved with credit score ${data.creditScore}`;
+    } else {
+      message = `loan is not approved due to low credit score ${data.creditScore}`;
+    }
+
+    let responseBody = {
+      loan_id,
+      customer_id,
+      loan_approved: data.approval,
+      message,
+      monthly_installment: data.monthly_installment,
+    };
+    return res.json({ success: true, data: responseBody });
   } catch (err) {
     console.log(err);
     return res.status(http_codes.internal_server_error).json({
