@@ -60,4 +60,7 @@ router.post(
   validator.validateRequest,
   loanController.createLoan
 );
+
+router.get("/view-loan/:loan_id", loanController.viewLoan);
+
 module.exports = router;

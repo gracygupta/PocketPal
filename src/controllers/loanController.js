@@ -280,3 +280,42 @@ exports.createLoan = async (req, res) => {
     });
   }
 };
+
+exports.viewLoan = async (req, res) => {
+  try {
+    const loan_id = req.params.loan_id;
+    const loanQuery = {
+      text: `SELECT loans.*, customers.* 
+               FROM loans 
+               INNER JOIN customers ON loans.customer_id = customers.customer_id 
+               WHERE loans.loan_id = $1`,
+      values: [loan_id],
+    };
+
+    const loanDataResult = await pool.query(loanQuery);
+    const result = loanDataResult.rows[0];
+
+    const responseBody = {
+      loan_id: result.loan_id,
+      customer: {
+        first_name: result.first_name,
+        last_name: result.last_name,
+        age: result.age,
+      },
+      loan_amount: parseFloat(result.loan_amount),
+      interest_rate: parseFloat(result.interest_rate),
+      monthly_installment: parseFloat(result.monthly_repayment),
+      tenure: result.tenure,
+    };
+
+    return res
+      .status(http_codes.success_code)
+      .json({ success: true, data: responseBody });
+  } catch (err) {
+    console.log(err);
+    return res.status(http_codes.internal_server_error).json({
+      success: false,
+      message: "Internal Server Error",
+    });
+  }
+};
