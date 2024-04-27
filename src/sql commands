@@ -1,0 +1,22 @@
+CREATE TABLE customers (
+    customer_id SERIAL PRIMARY KEY,
+    first_name VARCHAR(50),
+    last_name VARCHAR(50),
+    age NUMERIC,
+    phone_number VARCHAR(15),
+    monthly_salary NUMERIC,
+    approved_limit NUMERIC,
+    current_debt NUMERIC
+);
+
+CREATE TABLE loans (
+    loan_id SERIAL PRIMARY KEY,
+    customer_id INT REFERENCES customers(customer_id),
+    loan_amount NUMERIC,
+    tenure INT,
+    interest_rate NUMERIC,
+    monthly_repayment NUMERIC,
+    emis_paid_on_time INT,
+    start_date DATE,
+    end_date DATE
+);
