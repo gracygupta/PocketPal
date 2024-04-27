@@ -2,6 +2,7 @@ const express = require("express");
 const router = express.Router();
 const { body } = require("express-validator");
 const validator = require("../middlewares/validator");
+const loanController = require("../controllers/loanController");
 
 router.post(
   "/register",
@@ -36,4 +37,15 @@ router.post(
   require("../controllers/registerController").register
 );
 
+router.post(
+  "/check-eligibility",
+  [
+    body("customer_id", "customer_id required").exists(),
+    body("loan_amount", "loan_amount required").exists(),
+    body("interest_rate", "interest_rate required").exists(),
+    body("tenure", "tenure required").exists(),
+  ],
+  validator.validateRequest,
+  loanController.checkEligibility
+);
 module.exports = router;
