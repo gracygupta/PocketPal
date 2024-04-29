@@ -307,6 +307,12 @@ exports.viewLoan = async (req, res) => {
     };
 
     const loanDataResult = await pool.query(loanQuery);
+    if (loanDataResult.rowCount === 0) {
+      return res.status(404).json({
+        success: false,
+        message: "Loan not found",
+      });
+    }
     const result = loanDataResult.rows[0];
 
     const responseBody = {
@@ -350,9 +356,14 @@ exports.makePayment = async (req, res) => {
       values: [1, loan_id],
     };
     const loanResult = await pool.query(updateLoanQuery);
-    console.log("loanResult", loanResult.rows[0]);
+    if (loanResult.rowCount === 0) {
+      return res.status(404).json({
+        success: false,
+        message: "Loan not found",
+      });
+    }
+
     const updated_emis_paid_on_time = loanResult.rows[0].emis_paid_on_time;
-    console.log("updated_emis_paid_on_time", updated_emis_paid_on_time);
 
     // Retrieve the EMIs with emi_date in the current month
     const emiQuery = {
@@ -363,7 +374,6 @@ exports.makePayment = async (req, res) => {
       values: [customer_id, loan_id, currentMonth],
     };
     const emiResult = await pool.query(emiQuery);
-    console.log(emiResult.rows);
     const emis = emiResult.rows;
 
     if (emis[0] && emis[0].emi_status == "paid") {
