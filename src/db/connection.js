@@ -1,12 +1,13 @@
 const pg = require("pg");
 const { Pool } = pg;
+require("dotenv").config();
 
 const pool = new Pool({
-  user: "postgres",
-  host: "localhost",
-  database: "PocketPal",
-  password: "0410",
-  port: 5432,
+  user: process.env.USER,
+  host: process.env.HOST,
+  database: process.env.DATABASE,
+  password: process.env.PASSWORD,
+  port: process.env.DB_PORT, //DEFAULT 5432
 });
 
 dbConnect = async () => {
