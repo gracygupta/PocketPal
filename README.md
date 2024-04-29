@@ -1,10 +1,9 @@
-# Project Title
-
-A brief description of what this project does and who it's for.
+# PocketPal
+Credit Approval System
 
 ## Overview
 
-This project is designed to provide an API for managing loans, EMIs, and payments in a financial system. It allows users to view loan statements, make payments towards EMIs, and manage customer and loan records.
+The Credit Approval System project involves creating a system for assessing credit approval based on past data and future transactions. This system will analyze past loan data, customer credit history, and current financial transactions to determine the eligibility of customers for credit approval. It will involve tasks such as fetching and processing loan data, calculating credit scores, managing EMIs (Equated Monthly Installments), and updating customer and loan records in a database.
 
 ## Features
 
