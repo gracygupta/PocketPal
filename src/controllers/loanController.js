@@ -367,7 +367,6 @@ exports.makePayment = async (req, res) => {
     const emis = emiResult.rows;
 
     if (emis[0] && emis[0].emi_status == "paid") {
-      console.log("already paid");
       // Update the loans document to increment emis_paid_on_time
       const updateLoanQuery = {
         text: `UPDATE loans SET emis_paid_on_time = emis_paid_on_time - $1 WHERE loan_id = $2`,
@@ -427,8 +426,64 @@ exports.makePayment = async (req, res) => {
   }
 };
 
-exports.viewStatement = () => {
+exports.viewStatement = async (req, res) => {
   try {
+    const { customer_id, loan_id } = req.params;
+
+    // Fetch loan details
+    const loanQuery = {
+      text: `SELECT customer_id, loan_id, loan_amount AS principal, interest_rate, monthly_repayment 
+             FROM loans 
+             WHERE customer_id = $1 AND loan_id = $2`,
+      values: [customer_id, loan_id],
+    };
+    const loanDetails = await pool.query(loanQuery);
+
+    if (loanDetails.rowCount === 0) {
+      return res.status(404).json({
+        success: false,
+        message: "Loan not found",
+      });
+    }
+
+    const loan = loanDetails.rows[0];
+
+    // Calculate total amount paid so far
+    const paymentsQuery = {
+      text: `SELECT SUM(emi_amount) AS amount_paid 
+             FROM emis 
+             WHERE customer_id = $1 AND loan_id = $2`,
+      values: [customer_id, loan_id],
+    };
+    const paymentsResult = await pool.query(paymentsQuery);
+    const amount_paid = paymentsResult.rows[0].amount_paid || 0;
+
+    // Calculate remaining repayments
+    const remainingQuery = {
+      text: `SELECT COUNT(*) AS repayments_left 
+             FROM emis 
+             WHERE customer_id = $1 AND loan_id = $2 AND emi_status = 'pending'`,
+      values: [customer_id, loan_id],
+    };
+    const remainingResult = await pool.query(remainingQuery);
+    const repayments_left = remainingResult.rows[0].repayments_left;
+
+    // Prepare the response
+    const response = {
+      customer_id: loan.customer_id,
+      loan_id: loan.loan_id,
+      principal: loan.principal,
+      interest_rate: loan.interest_rate,
+      amount_paid,
+      monthly_installment: loan.monthly_repayment,
+      repayments_left,
+    };
+
+    // Send the response
+    res.json({
+      success: true,
+      data: response,
+    });
   } catch (err) {
     console.log(err);
     return res.status(http_codes.internal_server_error).json({

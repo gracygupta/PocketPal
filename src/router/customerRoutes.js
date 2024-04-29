@@ -70,6 +70,9 @@ router.post(
   loanController.makePayment
 );
 
-// router.get("/view-statement/:customer_id/:loan_id", loanController.viewStatement);
+router.get(
+  "/view-statement/:customer_id/:loan_id",
+  loanController.viewStatement
+);
 
 module.exports = router;
