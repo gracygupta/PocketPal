@@ -63,4 +63,13 @@ router.post(
 
 router.get("/view-loan/:loan_id", loanController.viewLoan);
 
+router.post(
+  "/make-payment/:customer_id/:loan_id",
+  [body("payment_amount", "payment_amount requored").exists()],
+  validator.validateRequest,
+  loanController.makePayment
+);
+
+// router.get("/view-statement/:customer_id/:loan_id", loanController.viewStatement);
+
 module.exports = router;

@@ -260,6 +260,20 @@ exports.createLoan = async (req, res) => {
       const loanDataResult = await pool.query(loanQuery);
       loan_id = loanDataResult.rows[0].loan_id;
       message = `load approved with credit score ${data.creditScore}`;
+
+      // Insert EMI documents for the loan
+      const emiAmount = data.monthly_installment;
+      //   const emiStartDate = new Date(start_date);
+      for (let i = 1; i <= tenure; i++) {
+        const emiDueDate = getEndDate(i);
+        const emiQuery = {
+          text: `INSERT INTO emis 
+                 (customer_id, loan_id, emi_number, emi_amount, emi_date, emi_status) 
+                 VALUES ($1, $2, $3, $4, $5, $6)`,
+          values: [customer_id, loan_id, i, emiAmount, emiDueDate, "pending"],
+        };
+        await pool.query(emiQuery);
+      }
     } else {
       message = `loan is not approved due to low credit score ${data.creditScore}`;
     }
@@ -311,6 +325,110 @@ exports.viewLoan = async (req, res) => {
     return res
       .status(http_codes.success_code)
       .json({ success: true, data: responseBody });
+  } catch (err) {
+    console.log(err);
+    return res.status(http_codes.internal_server_error).json({
+      success: false,
+      message: "Internal Server Error",
+    });
+  }
+};
+
+exports.makePayment = async (req, res) => {
+  try {
+    const customer_id = req.params.customer_id;
+    const loan_id = req.params.loan_id;
+    const { payment_amount } = req.body;
+
+    // Get the current month
+    const currentDate = new Date();
+    const currentMonth = currentDate.getMonth() + 1; // Months are zero-based, so add 1
+
+    // Update the loans document to increment emis_paid_on_time
+    const updateLoanQuery = {
+      text: `UPDATE loans SET emis_paid_on_time = emis_paid_on_time + $1 WHERE loan_id = $2 RETURNING emis_paid_on_time`,
+      values: [1, loan_id],
+    };
+    const loanResult = await pool.query(updateLoanQuery);
+    console.log("loanResult", loanResult.rows[0]);
+    const updated_emis_paid_on_time = loanResult.rows[0].emis_paid_on_time;
+    console.log("updated_emis_paid_on_time", updated_emis_paid_on_time);
+
+    // Retrieve the EMIs with emi_date in the current month
+    const emiQuery = {
+      text: `SELECT emi_id, emi_number, emi_amount, emi_date, emi_status 
+      FROM emis 
+      WHERE customer_id = $1 AND loan_id = $2
+      AND EXTRACT(MONTH FROM emi_date) = $3`,
+      values: [customer_id, loan_id, currentMonth],
+    };
+    const emiResult = await pool.query(emiQuery);
+    console.log(emiResult.rows);
+    const emis = emiResult.rows;
+
+    if (emis[0] && emis[0].emi_status == "paid") {
+      console.log("already paid");
+      // Update the loans document to increment emis_paid_on_time
+      const updateLoanQuery = {
+        text: `UPDATE loans SET emis_paid_on_time = emis_paid_on_time - $1 WHERE loan_id = $2`,
+        values: [1, loan_id],
+      };
+      await pool.query(updateLoanQuery);
+      return res.status(http_codes.bad_request).json({
+        success: false,
+        message: "emi already paid for the month",
+      });
+    }
+    // Process payment for each EMI in the current month
+    for (const emi of emis) {
+      const { emi_id, emi_amount } = emi;
+
+      // Calculate the due installment amount
+      const dueInstallmentAmount = emi_amount;
+
+      // Recalculate the EMI amount if the payment amount is different from the due installment amount
+      let newEmiAmount = dueInstallmentAmount;
+      if (payment_amount !== dueInstallmentAmount) {
+        // Implement your logic to recalculate the EMI amount here
+        newEmiAmount = payment_amount;
+      }
+
+      // Update the status of the EMI
+      let emi_status = "paid";
+      if (newEmiAmount < dueInstallmentAmount) {
+        emi_status = "partial";
+      }
+
+      const updateEmiStatusQuery = {
+        text: `UPDATE emis SET emi_status = $1, emi_amount = $2 WHERE emi_id = $3`,
+        values: [emi_status, newEmiAmount, emi_id],
+      };
+      await pool.query(updateEmiStatusQuery);
+    }
+
+    // Update the customer's current debt
+    const updateCustomerQuery = {
+      text: `UPDATE customers SET current_debt = current_debt - $1 WHERE customer_id = $2`,
+      values: [payment_amount, customer_id],
+    };
+    await pool.query(updateCustomerQuery);
+
+    // Respond with success message
+    res.status(http_codes.success_code).json({
+      success: true,
+      message: "Payment made successfully",
+    });
+  } catch (err) {
+    console.error(err);
+    return res.status(http_codes.internal_server_error).json({
+      success: false,
+      message: "Internal Server Error",
+    });
+  }
+};
+
+exports.viewStatement = () => {
+  try {
   } catch (err) {
     console.log(err);
     return res.status(http_codes.internal_server_error).json({
